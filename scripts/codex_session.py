@@ -98,13 +98,13 @@ def load_schema(value):
 def state_home(value=None):
     if value:
         return Path(value).expanduser()
-    if os.environ.get("KI_CODEX_HOME"):
-        return Path(os.environ["KI_CODEX_HOME"]).expanduser()
+    if os.environ.get("CODEX_CONNECTOR_HOME"):
+        return Path(os.environ["CODEX_CONNECTOR_HOME"]).expanduser()
     if os.name == "nt":
         base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-        return base / "ki-codex"
+        return base / "codex-connector"
     base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    return base / "ki-codex"
+    return base / "codex-connector"
 
 
 def read_json(path):
@@ -200,8 +200,8 @@ class AppServer:
             "initialize",
             {
                 "clientInfo": {
-                    "name": "ki-codex-session",
-                    "title": "ki Codex Session",
+                    "name": "codex-connector",
+                    "title": "Codex Connector",
                     "version": "1.0.0",
                 },
                 "capabilities": {"experimentalApi": True},
@@ -594,7 +594,7 @@ class Daemon:
         if method in ("attestation/generate", "account/chatgptAuthTokens/refresh", "item/tool/call"):
             self.app.respond(
                 request_id,
-                error={"code": -32601, "message": f"{method} is not supported by ki-codex-session"},
+                error={"code": -32601, "message": f"{method} is not supported by codex-connector"},
             )
             return
         thread_id = params.get("threadId")
@@ -1651,7 +1651,7 @@ def build_thread_params(args):
 
 def main(argv=None):
     parent = argparse.ArgumentParser(add_help=False)
-    parent.add_argument("--home", default=argparse.SUPPRESS, help="State directory (default: KI_CODEX_HOME or cache)")
+    parent.add_argument("--home", default=argparse.SUPPRESS, help="State directory (default: CODEX_CONNECTOR_HOME or cache)")
     parent.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Print raw JSON")
     parent.add_argument("--quiet", action="store_true", default=argparse.SUPPRESS, help="Suppress progress")
     parent.add_argument("--no-start", action="store_true", default=argparse.SUPPRESS, help="Do not auto-start the daemon")

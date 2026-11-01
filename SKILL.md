@@ -1,40 +1,36 @@
 ---
 name: codex-connector
-description: Full-control bridge to a persistent Codex app-server, and the default first choice for any Codex operation in ki. Use to create, list, read, resume, fork, archive, delete, and search Codex threads; start, steer, interrupt, and inspect turns; stream token-level events; and answer approval or tool-input requests. Use when the user says "ask Codex", "let Codex do it", "get a second opinion", "have Codex review this", wants independent implementation work with complete session control, or asks for the status, progress, or results of an existing Codex session or of a tmux pane running Codex.
+description: Full-control bridge to a persistent Codex app-server. Use whenever the user mentions Codex, asks to run or ask Codex, wants a second opinion or independent implementation work, or needs to create, list, read, resume, fork, archive, delete, or search Codex threads; start, steer, interrupt, or inspect turns; stream token-level events; or answer approval and tool-input requests.
 ---
 
 # Codex session control
 
-This skill owns one long-lived `codex app-server` process through a local daemon.
+This skill owns one long-lived `codex app-server` process through a local
+daemon.
 
 ## Use this first
 
-This is the default path for **any** Codex operation, including read-only
+This is the default path for any Codex operation, including read-only
 inspection. Before parsing `~/.codex/state_*.sqlite`, walking
 `sessions/**/rollout-*.jsonl`, or running `codex exec`, try `thread list`,
 `thread read`, `events`, and `turn status`. Hand-rolled reads duplicate this
 interface and cannot be reproduced by anyone else.
 
-Read-only subcommands: `daemon status`, `thread list`, `thread read`,
+Read-only subcommands — `daemon status`, `thread list`, `thread read`,
 `thread turns`, `thread items`, `thread loaded`, `turn status`, `events`,
-`approvals list`, `models`, `account read`. They never modify a thread and are
-safe against a thread that another agent or a TUI is actively driving.
+`approvals list`, `models`, `account read` — never modify a thread and are safe
+against a thread another agent or a TUI is actively driving.
 
-Do **not** use `send`, `turn steer`, or `turn interrupt` on a thread that
-another agent is driving: you would inject into or cancel its live turn. To
-branch a conversation, fork it and work on the fork.
+Do not use `send`, `turn steer`, or `turn interrupt` on a thread another agent
+is driving: you would inject into or cancel its live turn. To branch a
+conversation, fork it and work on the fork.
 
-One protocol limit matters for status questions: `thread/*` is a Codex-level
-view and cannot say which `tmux` pane or OS process owns a thread. To bind a
-pane to a thread, use process inspection — `tmux list-panes -F
-'#{pane_index} #{pane_pid}'`, then that shell's child `codex` pid, then the
-`rollout-*.jsonl` being appended whose `session_meta.session_id` equals the
-thread id. `cwd` and `created_at` from `thread list` are the cheap cross-check.
-Every command below talks to that same process, so a turn started by one ki
-tool call can be steered, interrupted, inspected, or approved by another.
+Every command below talks to the same process, so a turn started by one caller
+can be steered, interrupted, inspected, or approved by another call.
 
-Do not use `codex exec` for this skill. `exec` is a one-process-per-call wrapper
-and cannot list, fork, steer, interrupt, or answer approvals across calls.
+Use the daemon rather than `codex exec`: `exec` is a one-process-per-call
+wrapper and cannot list, fork, steer, interrupt, or answer approvals across
+calls.
 
 ## Architecture
 
@@ -47,23 +43,26 @@ daemon:
 - exposes a token-authenticated localhost TCP control socket;
 - keeps thread, turn, usage, and pending-approval state in memory.
 
-State lives in `KI_CODEX_HOME` or the platform cache (`~/.cache/ki-codex` on
-Linux/macOS, `%LOCALAPPDATA%\ki-codex` on Windows). `daemon.json` is mode 0600
-and contains the control token; do not edit or print it.
+State lives in `CODEX_CONNECTOR_HOME` or the platform cache
+(`~/.cache/codex-connector` on Linux/macOS, `%LOCALAPPDATA%\codex-connector` on
+Windows). `daemon.json` is mode 0600 and contains the control token; do not
+edit or print it.
 
 ## Quick start
 
 ```bash
-python3 scripts/codex_session.py daemon start
-python3 scripts/codex_session.py thread list
-python3 scripts/codex_session.py thread start --cwd "$PWD"
-python3 scripts/codex_session.py thread read <thread-id> --turns
+S=<skill-dir>/scripts/codex_session.py
+
+python3 $S daemon start
+python3 $S thread list
+python3 $S thread start --cwd "$PWD"
+python3 $S thread read <thread-id> --turns
 ```
 
 Run a turn and stream it:
 
 ```bash
-python3 scripts/codex_session.py send --thread <thread-id> \
+python3 $S send --thread <thread-id> \
   'Implement the fix. Do not commit. Run the relevant tests.'
 ```
 
@@ -198,8 +197,8 @@ Defaults:
 | Sandbox | `danger-full-access` |
 | Approval | `never` |
 
-Codex can modify any file and run any command. The previous restrictions are
-now explicit opt-ins, not defaults:
+Codex can modify any file and run any command. Sandbox limits are explicit
+opt-ins:
 
 | Value | Meaning |
 | --- | --- |
@@ -218,19 +217,19 @@ the default `danger-full-access` does not use that sandbox.
 
 ## Operating rules
 
-- Codex uses its own auth (`~/.codex/auth.json` or `CODEX_HOME`), not ki's
-  `credentials.json`. Check with `codex login status`; if logged out, the user
-  must run `codex login`.
+- Codex uses its own auth (`~/.codex/auth.json` or `CODEX_HOME`), not the
+  caller's provider credentials. Check with `codex login status`; if logged
+  out, the user must run `codex login`.
 - Codex reads the repository's `AGENTS.md`; that is expected. It does not see
-  ki's system prompt or this conversation. Put the full task, paths,
+  your system prompt or this conversation. Put the full task, paths,
   constraints, acceptance criteria, and verification commands in the prompt.
 - In write tasks, always inspect `git diff` and run the tests yourself. Codex's
   final message is a claim, not verification.
 - Do not let Codex commit, push, or change credentials unless the user asked.
 - One active turn per thread. Use `turn steer` for corrections during a turn,
   and a new turn after it completes.
-- The daemon is shared across ki sessions. Do not start a second `codex
-  app-server` or edit `daemon.json` by hand.
+- The daemon is shared across callers. Do not start a second
+  `codex app-server` or edit `daemon.json` by hand.
 - `daemon stop` interrupts active turns and stops the shared daemon. Prefer
   `daemon restart` after updating this script.
 
